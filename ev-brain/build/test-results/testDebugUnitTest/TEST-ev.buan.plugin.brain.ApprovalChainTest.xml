@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ev.buan.plugin.brain.ApprovalChainTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-10T07:11:40.057Z" hostname="localhost" time="0.068">
+  <properties/>
+  <testcase name="没有审批门时按拒绝处理" classname="ev.buan.plugin.brain.ApprovalChainTest" time="0.053"/>
+  <testcase name="审批门抛错时按不可用处理，而不是放行" classname="ev.buan.plugin.brain.ApprovalChainTest" time="0.001"/>
+  <testcase name="人拒绝时给出理由" classname="ev.buan.plugin.brain.ApprovalChainTest" time="0.004"/>
+  <testcase name="审计写失败不影响决策" classname="ev.buan.plugin.brain.ApprovalChainTest" time="0.002"/>
+  <testcase name="问之前就记一笔，问之后才记答案" classname="ev.buan.plugin.brain.ApprovalChainTest" time="0.001"/>
+  <testcase name="允许一次就放行并留下成对审计" classname="ev.buan.plugin.brain.ApprovalChainTest" time="0.001"/>
+  <testcase name="会话内允许也是放行，但记录成 ALLOWED_SESSION" classname="ev.buan.plugin.brain.ApprovalChainTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

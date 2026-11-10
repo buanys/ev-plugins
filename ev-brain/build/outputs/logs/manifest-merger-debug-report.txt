@@ -1,0 +1,45 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:2:1-16:12
+INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:2:1-16:12
+INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:2:1-16:12
+INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:2:1-16:12
+	package
+		INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml
+	android:versionName
+		INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml
+	android:versionCode
+		INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:2:11-69
+application
+ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:4:5-14:19
+INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:4:5-14:19
+	android:extractNativeLibs
+		INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml
+meta-data#cordis.entry
+ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:5:9-7:69
+	android:value
+		ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:7:13-66
+	android:name
+		ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:6:13-40
+meta-data#cordis.api
+ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:8:9-10:33
+	android:value
+		ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:10:13-30
+	android:name
+		ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:9:13-38
+meta-data#cordis.hostApi
+ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:11:9-13:52
+	android:value
+		ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:13:13-49
+	android:name
+		ADDED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml:12:13-42
+uses-sdk
+INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml
+INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /workspace/ev-plugins/ev-brain/src/main/AndroidManifest.xml

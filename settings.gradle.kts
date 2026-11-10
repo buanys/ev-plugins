@@ -25,4 +25,5 @@ includeBuild("/workspace/EV")
 
 include(":ev-tools")
 include(":ev-log")
+include(":ev-brain")
 
