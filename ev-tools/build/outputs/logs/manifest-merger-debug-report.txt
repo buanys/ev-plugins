@@ -1,0 +1,45 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:2:1-21:12
+INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:2:1-21:12
+INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:2:1-21:12
+INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:2:1-21:12
+	package
+		INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml
+	android:versionName
+		INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml
+	android:versionCode
+		INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:2:11-69
+application
+ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:9:5-19:19
+INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:9:5-19:19
+	android:extractNativeLibs
+		INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml
+meta-data#cordis.entry
+ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:10:9-12:71
+	android:value
+		ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:12:13-68
+	android:name
+		ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:11:13-40
+meta-data#cordis.api
+ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:13:9-15:33
+	android:value
+		ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:15:13-30
+	android:name
+		ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:14:13-38
+meta-data#cordis.hostApi
+ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:16:9-18:52
+	android:value
+		ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:18:13-49
+	android:name
+		ADDED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml:17:13-42
+uses-sdk
+INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml
+INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /workspace/ev-plugins/ev-tools/src/main/AndroidManifest.xml
