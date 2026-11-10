@@ -48,6 +48,24 @@ dependencies {
 
 val pluginDist = layout.buildDirectory.dir("dist")
 
+// ---------------------------------------------------------------- 产物命名
+//
+// 文件名给人看，id 给机器看，两者分开：
+//
+//   产物  「工具总线-base.jar」/「工具总线-base.json」
+//   id    ev.buan.plugin.tools
+//   入口  ev.buan.plugin.tools.ToolRegistryPlugin
+//
+// 中文在前是为了在 /sdcard/EV/mods 里一眼认出这是什么东西；
+// `-` 后面是**分类的英文名**（base / feature / integration / resource），
+// 与仓库里 plugins/<类>/<名> 那一层对应，用来在两个中文名相近时区分。
+//
+// **jar 与 sidecar 必须同名同前缀**：宿主按「jar 去掉扩展名 + .json」找 sidecar
+// （PluginMetadataReader.readSidecarMetadata），两个名字对不上，插件会被当成没有元数据。
+val pluginDisplayName = "工具总线"
+val pluginCategory = "base"
+val artifactBase = "$pluginDisplayName-$pluginCategory"
+
 val bundlePluginJar = tasks.register<Zip>("bundlePluginJar") {
     group = "distribution"
     dependsOn("assembleDebug")
@@ -55,12 +73,18 @@ val bundlePluginJar = tasks.register<Zip>("bundlePluginJar") {
         include("classes*.dex")
     }
     destinationDirectory.set(pluginDist)
-    archiveFileName.set("${project.name}.jar")
+    archiveFileName.set("$artifactBase.jar")
+    // 改名之后 dist 里会留着上一次的旧产物，而 bundlePlugin 的自检要求
+    // "恰好一个 jar + 一个 sidecar"——旧文件会让改名这件事在构建期失败。
+    // 每次打包先清空，改名就只是改名。
+    doFirst {
+        pluginDist.get().asFile.listFiles()?.forEach { it.delete() }
+    }
 }
 
 tasks.register("bundlePlugin") {
     group = "distribution"
-    description = "Produce ev-tools.jar and ev-tools.json for EV/mods"
+    description = "Produce $artifactBase.jar / .json for EV/mods"
     dependsOn("bundlePluginJar")
     doLast {
         // sidecar 是运行时唯一能读到的元信息。hostApi 用范围而不是整数：
@@ -75,7 +99,7 @@ tasks.register("bundlePlugin") {
               "permissions": []
             }
         """.trimIndent()
-        File(pluginDist.get().asFile, "${project.name}.json").writeText(metadata)
+        File(pluginDist.get().asFile, "$artifactBase.json").writeText(metadata)
     }
 }
 
