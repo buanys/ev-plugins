@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="ev.buan.plugin.brain.ToolPipelineTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-10T07:11:40.178Z" hostname="localhost" time="0.288">
+<testsuite name="ev.buan.plugin.brain.ToolPipelineTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-10T08:08:55.849Z" hostname="localhost" time="0.456">
   <properties/>
-  <testcase name="并行安全的一组会并发执行" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.096"/>
+  <testcase name="并行安全的一组会并发执行" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.142"/>
+  <testcase name="耗时由执行器自己测，不是上层编的" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.054"/>
+  <testcase name="取消时把没结果的调用如实记成放弃" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.052"/>
   <testcase name="工具抛错变成结果文本，兄弟调用继续" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.002"/>
-  <testcase name="普通工具不走审批" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.0"/>
-  <testcase name="未知工具不会抛，而是一条错误结果" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.001"/>
+  <testcase name="普通工具不走审批" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.001"/>
+  <testcase name="未知工具不会抛，而是一条错误结果" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.004"/>
   <testcase name="危险工具没有批准就不执行" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.001"/>
-  <testcase name="结果顺序与调用顺序一致" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.061"/>
+  <testcase name="结果顺序与调用顺序一致" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.066"/>
   <testcase name="危险工具批准后才执行" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.002"/>
-  <testcase name="独占调用会串行" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.124"/>
+  <testcase name="独占调用会串行" classname="ev.buan.plugin.brain.ToolPipelineTest" time="0.126"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

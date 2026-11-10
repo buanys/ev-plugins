@@ -2,6 +2,10 @@ package ev.buan.plugin.brain
 
 import ev.buan.plugins.agent.api.AbandonReason
 import ev.buan.plugins.agent.api.AgentToolCall
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -25,7 +29,6 @@ class ToolPipelineTest {
         registry = FakeRegistry(tools),
         authorize = authorize,
         onSignal = {},
-        onAbandon = { _, _ -> },
     )
 
     @Test
@@ -95,6 +98,45 @@ class ToolPipelineTest {
         val outcomes = run(listOf(call("1", "rm")), listOf(tool)) { _, _ -> null }
         assertEquals(1, tool.invocations)
         assertEquals("删了", outcomes.single().text)
+    }
+
+    @Test
+    fun `耗时由执行器自己测，不是上层编的`() = runBlocking {
+        val tool = FakeTool(toolSpec("slow")) { kotlinx.coroutines.delay(50); "ok" }
+        val outcomes = run(listOf(call("1", "slow")), listOf(tool))
+        assertTrue("应当测到耗时，实际 ${outcomes.single().elapsedMs}ms", outcomes.single().elapsedMs >= 40)
+    }
+
+    @Test
+    fun `取消时把没结果的调用如实记成放弃`() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val tool = FakeTool(toolSpec("slow")) {
+            entered.complete(Unit)
+            delay(5_000)
+            "never"
+        }
+        val signals = mutableListOf<ToolPipeline.Signal>()
+
+        val job = launch {
+            ToolPipeline().execute(
+                calls = listOf(call("1", "slow"), call("2", "slow")),
+                registry = FakeRegistry(listOf(tool)),
+                authorize = { _, _ -> null },
+                onSignal = { signals += it },
+            )
+        }
+        entered.await()
+        job.cancelAndJoin()
+
+        val abandoned = signals.filterIsInstance<ToolPipeline.Signal.Abandoned>()
+        val all = abandoned.flatMap { it.calls }
+        assertEquals(
+            "跑过的记 OUTCOME_UNKNOWN，没跑到的记 NOT_STARTED",
+            setOf("1", "2"),
+            all.map { it.id }.toSet(),
+        )
+        assertTrue(abandoned.any { it.reason == AbandonReason.OUTCOME_UNKNOWN })
+        assertTrue(abandoned.any { it.reason == AbandonReason.NOT_STARTED })
     }
 
     @Test

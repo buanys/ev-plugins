@@ -15,6 +15,7 @@ import ev.buan.plugins.agent.api.PromptContext
 import ev.buan.plugins.agent.api.PromptLayer
 import ev.buan.plugins.agent.api.SessionEvent
 import ev.buan.plugins.agent.api.SessionLog
+import ev.buan.plugins.agent.api.StepState
 import ev.buan.plugins.agent.api.SystemPromptService
 import ev.buan.plugins.agent.api.ToolRegistry
 import kotlinx.coroutines.CancellationException
@@ -64,7 +65,7 @@ internal class AgentLoop(
         sessionId: String,
         text: String,
         modelRef: ModelRef,
-        persona: String?,
+        systemPrompt: String?,
         onProgress: suspend (AgentProgress) -> Unit,
     ): AgentReply {
         log.append(sessionId, SessionEvent.Message(AgentMessage(AgentRole.USER, text)))
@@ -92,7 +93,7 @@ internal class AgentLoop(
             rounds++
             onProgress(AgentProgress.RoundStarted(rounds))
 
-            val request = buildRequest(sessionId, persona)
+            val request = buildRequest(sessionId, systemPrompt)
             val reply = try {
                 model.completeStreaming(modelRef, request, registry?.specs().orEmpty()) { delta ->
                     onProgress(AgentProgress.TextDelta(rounds, delta))
@@ -147,20 +148,17 @@ internal class AgentLoop(
                         is ToolPipeline.Signal.Finished -> onProgress(
                             AgentProgress.ToolFinished(
                                 id = signal.outcome.call.id,
-                                state = if (signal.outcome.isError) {
-                                    ev.buan.plugins.agent.api.StepState.Failed
-                                } else {
-                                    ev.buan.plugins.agent.api.StepState.Ok
-                                },
-                                elapsedMs = 0,
+                                state = if (signal.outcome.isError) StepState.Failed else StepState.Ok,
+                                // 执行器自己测的耗时。上层不编数字。
+                                elapsedMs = signal.outcome.elapsedMs,
                                 preview = signal.outcome.text.take(300),
                             ),
                         )
-                    }
-                },
-                onAbandon = { abandoned, reason ->
-                    abandoned.forEach { call ->
-                        log.append(sessionId, SessionEvent.ToolAbandoned(call.id, call.name, reason))
+
+                        // 取消时补记：没结果的调用必须留下痕迹，否则历史里会有个洞。
+                        is ToolPipeline.Signal.Abandoned -> signal.calls.forEach { call ->
+                            log.append(sessionId, SessionEvent.ToolAbandoned(call.id, call.name, signal.reason))
+                        }
                     }
                 },
             )
@@ -214,7 +212,7 @@ internal class AgentLoop(
      * 易变层（时间、电量这类）不放进系统消息，而是并进最后一条用户消息的末尾：
      * prefix cache 从第一个 token 开始比对，系统消息一变，后面整段历史都失效。
      */
-    private suspend fun buildRequest(sessionId: String, persona: String?): List<AgentMessage> {
+    private suspend fun buildRequest(sessionId: String, systemPrompt: String?): List<AgentMessage> {
         val now = clock()
         val layers = runCatching { prompt?.layers(PromptContext(sessionId, now)).orEmpty() }
             .getOrElse { emptyList() }
@@ -224,7 +222,7 @@ internal class AgentLoop(
         val volatile = layers.filter { it.volatile }
 
         val system = buildString {
-            persona?.takeIf { it.isNotBlank() }?.let { append(it.trim()).append("\n\n") }
+            systemPrompt?.takeIf { it.isNotBlank() }?.let { append(it.trim()).append("\n\n") }
             stable.forEach { layer -> append("## ").append(layer.title).append('\n').append(layer.body).append("\n\n") }
         }.trim()
 

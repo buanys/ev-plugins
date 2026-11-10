@@ -48,10 +48,12 @@ internal class BrainService(
         model: ModelRef?,
         systemPrompt: String?,
     ): AgentReply {
-        val loop = prepare() ?: return notConnected()
-        val ref = model ?: models?.models?.firstOrNull() ?: return notConnected("模型列表还是空的")
+        val prepared = prepare()
+        if (prepared is Preparation.NotReady) return notConnected(prepared.reason)
+        val ready = prepared as Preparation.Ready
+        val ref = model ?: ready.models.first()
         return try {
-            loop.run(sessionId, text, ref, systemPrompt?.takeIf { it.isNotBlank() }, onProgress = {})
+            ready.loop.run(sessionId, text, ref, systemPrompt?.takeIf { it.isNotBlank() }, onProgress = {})
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
@@ -65,18 +67,15 @@ internal class BrainService(
         model: ModelRef?,
         systemPrompt: String?,
     ): Flow<AgentProgress> = flow {
-        val loop = prepare()
-        if (loop == null) {
-            emit(AgentProgress.Done(notConnected()))
+        val prepared = prepare()
+        if (prepared is Preparation.NotReady) {
+            emit(AgentProgress.Done(notConnected(prepared.reason)))
             return@flow
         }
-        val ref = model ?: models?.models?.firstOrNull()
-        if (ref == null) {
-            emit(AgentProgress.Done(notConnected("模型列表还是空的")))
-            return@flow
-        }
+        val ready = prepared as Preparation.Ready
+        val ref = model ?: ready.models.first()
         try {
-            loop.run(sessionId, text, ref, systemPrompt?.takeIf { it.isNotBlank() }) { progress ->
+            ready.loop.run(sessionId, text, ref, systemPrompt?.takeIf { it.isNotBlank() }) { progress ->
                 emit(progress)
             }
         } catch (cancellation: CancellationException) {
@@ -86,11 +85,24 @@ internal class BrainService(
         }
     }
 
+    /**
+     * 能不能跑，以及缺什么——**一个类型说清一件事**。
+     *
+     * 以前这里返回 `AgentLoop?`，缺什么由另一个 `missingReason()` 再判一次。
+     * 同一份知识编码在两个地方，改一处忘另一处就会给出错误的解释。
+     */
+    private sealed interface Preparation {
+        data class Ready(val loop: AgentLoop, val models: List<ModelRef>) : Preparation
+        data class NotReady(val reason: String) : Preparation
+    }
+
     /** 六个依赖里缺任何一个都不组 loop：半套依赖跑起来只会产出错误的历史。 */
-    private fun prepare(): AgentLoop? {
-        val log = log ?: return null
-        val model = models ?: return null
-        return AgentLoop(
+    private fun prepare(): Preparation {
+        val log = log ?: return Preparation.NotReady("事件流插件（ev-log）没启动")
+        val model = models ?: return Preparation.NotReady("模型插件（ev-model）没启动")
+        if (model.models.isEmpty()) return Preparation.NotReady("模型插件还没有配置任何模型")
+
+        val loop = AgentLoop(
             log = log,
             registry = registry,
             model = model,
@@ -99,17 +111,11 @@ internal class BrainService(
             pipeline = ToolPipeline(maxParallel),
             limits = limits,
         )
-    }
-
-    private fun missingReason(): String = when {
-        log == null -> "事件流插件（ev-log）没启动"
-        models == null -> "模型插件（ev-model）没启动"
-        models?.models?.isEmpty() == true -> "模型插件还没有配置任何模型"
-        else -> "依赖没有就绪"
+        return Preparation.Ready(loop, model.models)
     }
 
     /** 契约要求：不 ready 也要答一句人话，调用方忽略 [ready] 也不该看到崩溃。 */
-    private fun notConnected(detail: String = missingReason()): AgentReply = AgentReply(
+    private fun notConnected(detail: String): AgentReply = AgentReply(
         message = AgentMessage(AgentRole.ASSISTANT, "还没连上：$detail。"),
         stop = AgentStop(AgentStop.Reason.ERROR, rounds = 0, toolCalls = 0, detail = detail),
     )

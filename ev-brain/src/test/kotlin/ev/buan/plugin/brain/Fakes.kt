@@ -58,8 +58,7 @@ internal class FakeLog : SessionLog {
         events += event
     }
 
-    override suspend fun messages(sessionId: String): List<AgentMessage> =
-        HistoryProjection.messages(events)
+    override suspend fun messages(sessionId: String): List<AgentMessage> = project(events)
 
     override suspend fun events(sessionId: String): List<SessionEvent> = events.toList()
 
@@ -74,11 +73,13 @@ internal class FakeLog : SessionLog {
 }
 
 /**
- * 照 ev-log 的投影规则重算，而不是自己 another 一套——测试要验证的是"主循环写进去的东西
- * 能不能被投影成正确历史"，用被测插件自己的规则才算数。
+ * 替身自己对 [SessionLog.messages] 的实现。
+ *
+ * 它**不是** ev-log 的实现副本：`SessionLog` 是宿主契约，任何实现都必须能把事件折成消息。
+ * 这里只需要满足契约的最小语义，让主循环的测试能验"写进去的事件顺序对不对"。
+ * 真正的投影规则由 ev-log 自己的 25 条单测守着。
  */
-internal object HistoryProjection {
-    fun messages(events: List<SessionEvent>): List<AgentMessage> = buildList {
+private fun project(events: List<SessionEvent>): List<AgentMessage> = buildList {
         val answered = events.filterIsInstance<SessionEvent.Message>()
             .map { it.message }
             .filter { it.toolCallId != null }
@@ -94,7 +95,6 @@ internal object HistoryProjection {
                 else -> Unit
             }
         }
-    }
 }
 
 /** 按顺序吐预设回复的模型。用完还在被调用就返回最后一条。 */

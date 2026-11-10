@@ -31,7 +31,10 @@ import kotlinx.coroutines.withContext
  * （[AbandonReason.NOT_STARTED] 或 [AbandonReason.OUTCOME_UNKNOWN]），再把取消原样抛出。
  * 这一步必须做，否则会话日志里会留下"请求了工具、永远没有结果"的裂口。
  */
-internal class ToolPipeline(private val maxParallel: Int = DEFAULT_MAX_PARALLEL) {
+internal class ToolPipeline(
+    private val maxParallel: Int = DEFAULT_MAX_PARALLEL,
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
 
     /** 一次调用的结局。[isError] 为 true 时 [text] 是一条 `Error: …`，模型据此换路。 */
     data class Outcome(
@@ -39,27 +42,29 @@ internal class ToolPipeline(private val maxParallel: Int = DEFAULT_MAX_PARALLEL)
         val text: String,
         val isError: Boolean,
         val images: List<AgentImage> = emptyList(),
+        /** 这次调用花了多久。由执行器自己测——上层不该编一个数字出来。 */
+        val elapsedMs: Long = 0,
     )
 
     /** 执行器对外播报的信号，用来驱动 UI 的进度。 */
     sealed interface Signal {
         data class Started(val call: AgentToolCall) : Signal
         data class Finished(val outcome: Outcome) : Signal
+        /** 取消时对没能落地的调用的补记通知。语义与 [Finished] 同级，不是另一套通道。 */
+        data class Abandoned(val calls: List<AgentToolCall>, val reason: AbandonReason) : Signal
     }
 
     /**
      * 执行 [calls]，返回与它**一一对应且同序**的结果。
      *
      * @param authorize 危险工具的审批回调，返回拒绝理由；null 表示放行。
-     * @param onSignal 开始/结束通知，实现方可以让它不做事。
-     * @param onAbandon 取消时对未完成调用的补记回调。
+     * @param onSignal 一切观察都走这一条：开始、结束、取消时的补记。
      */
     suspend fun execute(
         calls: List<AgentToolCall>,
         registry: ToolRegistry?,
         authorize: suspend (AgentToolCall, ToolSpec) -> String?,
         onSignal: suspend (Signal) -> Unit,
-        onAbandon: suspend (List<AgentToolCall>, AbandonReason) -> Unit,
     ): List<Outcome> {
         val slots = arrayOfNulls<Outcome>(calls.size)
         val started = BooleanArray(calls.size)
@@ -92,12 +97,13 @@ internal class ToolPipeline(private val maxParallel: Int = DEFAULT_MAX_PARALLEL)
             }
         } catch (cancellation: CancellationException) {
             withContext(NonCancellable) {
-                val pending = calls.indices.filter { slots[it] == null && started[it] }
+                // 没拿到结果的一律要记账；是否开跑只影响记哪种原因。
+                val pending = calls.indices.filter { slots[it] == null }
                 if (pending.isNotEmpty()) {
                     val neverRan = pending.filterNot { started[it] }.map { calls[it] }
                     val unknown = pending.filter { started[it] }.map { calls[it] }
-                    if (neverRan.isNotEmpty()) onAbandon(neverRan, AbandonReason.NOT_STARTED)
-                    if (unknown.isNotEmpty()) onAbandon(unknown, AbandonReason.OUTCOME_UNKNOWN)
+                    if (neverRan.isNotEmpty()) onSignal(Signal.Abandoned(neverRan, AbandonReason.NOT_STARTED))
+                    if (unknown.isNotEmpty()) onSignal(Signal.Abandoned(unknown, AbandonReason.OUTCOME_UNKNOWN))
                 }
             }
             throw cancellation
@@ -118,12 +124,13 @@ internal class ToolPipeline(private val maxParallel: Int = DEFAULT_MAX_PARALLEL)
             ?: return Outcome(call, "Error: 没有叫 ${call.name} 的工具", true)
 
         onSignal(Signal.Started(call))
+        val startedAt = clock()
 
         // 审批在**执行之前**：危险工具必须拿到明确放行，拿不到就不跑。
         if (tool.spec.dangerous) {
             val refusal = authorize(call, tool.spec)
             if (refusal != null) {
-                val denied = Outcome(call, "Error: $refusal", true)
+                val denied = Outcome(call, "Error: $refusal", true, elapsedMs = clock() - startedAt)
                 onSignal(Signal.Finished(denied))
                 return denied
             }
@@ -131,12 +138,12 @@ internal class ToolPipeline(private val maxParallel: Int = DEFAULT_MAX_PARALLEL)
 
         val outcome = try {
             val result = tool.invokeResult(call.argumentsJson)
-            Outcome(call, result.text, false, result.images)
+            Outcome(call, result.text, false, result.images, clock() - startedAt)
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
             // 工具自己炸了：变成结果文本，兄弟调用继续，这一轮不因此失败。
-            Outcome(call, "Error: ${error.message ?: error::class.simpleName}", true)
+            Outcome(call, "Error: ${error.message ?: error::class.simpleName}", true, elapsedMs = clock() - startedAt)
         }
 
         onSignal(Signal.Finished(outcome))
