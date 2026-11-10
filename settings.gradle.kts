@@ -24,4 +24,5 @@ rootProject.name = "ev-plugins"
 includeBuild("/workspace/EV")
 
 include(":ev-tools")
+include(":ev-log")
 

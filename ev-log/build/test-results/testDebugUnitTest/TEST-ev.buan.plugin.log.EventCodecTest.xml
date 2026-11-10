@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ev.buan.plugin.log.EventCodecTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-10T06:37:33.090Z" hostname="localhost" time="0.008">
+  <properties/>
+  <testcase name="坏 JSON 返回 null" classname="ev.buan.plugin.log.EventCodecTest" time="0.004"/>
+  <testcase name="普通消息往返一致" classname="ev.buan.plugin.log.EventCodecTest" time="0.001"/>
+  <testcase name="轮次结束保留原因与计数" classname="ev.buan.plugin.log.EventCodecTest" time="0.0"/>
+  <testcase name="放弃记录保留原因" classname="ev.buan.plugin.log.EventCodecTest" time="0.001"/>
+  <testcase name="带工具调用的助手消息往返一致" classname="ev.buan.plugin.log.EventCodecTest" time="0.001"/>
+  <testcase name="不认识的类型返回 null 而不是抛" classname="ev.buan.plugin.log.EventCodecTest" time="0.0"/>
+  <testcase name="缺字段不会炸掉整条会话" classname="ev.buan.plugin.log.EventCodecTest" time="0.0"/>
+  <testcase name="审批的两个阶段都能往返" classname="ev.buan.plugin.log.EventCodecTest" time="0.001"/>
+  <testcase name="图片不落盘但文字保留" classname="ev.buan.plugin.log.EventCodecTest" time="0.0"/>
+  <testcase name="工具结果保留关联 id 与工具名" classname="ev.buan.plugin.log.EventCodecTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

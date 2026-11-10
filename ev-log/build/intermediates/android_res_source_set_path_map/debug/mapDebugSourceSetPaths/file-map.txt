@@ -1,0 +1,8 @@
+ev.buan.plugin.log.ev-log-pngs-0 /workspace/ev-plugins/ev-log/build/generated/res/pngs/debug
+ev.buan.plugin.log.ev-log-updated_navigation_xml-1 /workspace/ev-plugins/ev-log/build/generated/updated_navigation_xml/debug
+ev.buan.plugin.log.ev-log-packageDebugResources-2 /workspace/ev-plugins/ev-log/build/intermediates/incremental/debug/packageDebugResources/merged.dir
+ev.buan.plugin.log.ev-log-packageDebugResources-3 /workspace/ev-plugins/ev-log/build/intermediates/incremental/debug/packageDebugResources/stripped.dir
+ev.buan.plugin.log.ev-log-debug-4 /workspace/ev-plugins/ev-log/build/intermediates/merged_res/debug/mergeDebugResources
+ev.buan.plugin.log.ev-log-debug-5 /workspace/ev-plugins/ev-log/src/debug/res
+ev.buan.plugin.log.ev-log-main-6 /workspace/ev-plugins/ev-log/src/main/res
+gradleHome-0 /root/.gradle

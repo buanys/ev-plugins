@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ev.buan.plugin.log.HistoryProjectionTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-10T06:37:33.052Z" hostname="localhost" time="0.036">
+  <properties/>
+  <testcase name="已有真实结果时不再合成假结果" classname="ev.buan.plugin.log.HistoryProjectionTest" time="0.017"/>
+  <testcase name="被放弃的调用变成一条失败结果" classname="ev.buan.plugin.log.HistoryProjectionTest" time="0.012"/>
+  <testcase name="空日志派生出空历史" classname="ev.buan.plugin.log.HistoryProjectionTest" time="0.001"/>
+  <testcase name="洞的判定只看没结果的调用" classname="ev.buan.plugin.log.HistoryProjectionTest" time="0.001"/>
+  <testcase name="还没开始跑的放弃记录鼓励重试" classname="ev.buan.plugin.log.HistoryProjectionTest" time="0.0"/>
+  <testcase name="重复的 toolCallId 只算一次" classname="ev.buan.plugin.log.HistoryProjectionTest" time="0.0"/>
+  <testcase name="顺序保持追加顺序" classname="ev.buan.plugin.log.HistoryProjectionTest" time="0.0"/>
+  <testcase name="只有模型可见事件进历史" classname="ev.buan.plugin.log.HistoryProjectionTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

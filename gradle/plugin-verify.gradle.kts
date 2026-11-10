@@ -82,28 +82,35 @@ tasks.matching { it.name == "bundlePlugin" }.configureEach {
     }
 }
 
-// 3. 分层检查：只有 base（能力层）可以声明 HostPermission。
+// 3. 分层检查：只有 base（能力层）可以声明**系统数据**权限。
 //
 //    这条不是风格问题。旧仓库把「骨架」和「能力」塞进同一个 base/ 文件夹，
 //    结果一个只该持有服务总线的东西也能声明 ROOT_SHELL，没人说得清它对不对。
-//    把分类写进产物名之后，这条就变成可检查的了：分类由模块自己声明（evPluginCategory），
-//    声明能力却不在 base 层，直接在打包时失败。
+//
+//    唯一的例外是 PLUGIN_STORAGE：它给的是插件自己的私有目录，不是用户的系统数据。
+//    没有它，log / memory 这类骨架插件连落盘都做不到。所以判据是
+//    「碰不碰用户数据」，而不是「声明没声明权限」。
 tasks.matching { it.name == "bundlePlugin" }.configureEach {
     doLast {
         val category = (project.findProperty("evPluginCategory") as String?)?.lowercase() ?: return@doLast
         if (category == "base") return@doLast
 
+        val allowedForSkeleton = setOf("PLUGIN_STORAGE")
         val dist = layout.buildDirectory.dir("dist").get().asFile
         val sidecar = dist.listFiles { f -> f.extension == "json" }?.firstOrNull() ?: return@doLast
         val declared = Regex("\"permissions\"\\s*:\\s*\\[([^\\]]*)\\]")
             .find(sidecar.readText())
             ?.groupValues?.get(1)
-            ?.trim()
+            ?.split(",")
+            ?.map { it.trim().trim('"') }
+            ?.filter { it.isNotEmpty() }
             .orEmpty()
-        check(declared.isEmpty()) {
-            "$sidecar 声明了权限 [$declared]，但它是 $category 层。" +
-                "只有 base（能力层）可以声明 HostPermission——" +
-                "骨架层拿权限说明分层错了，能力应该下沉成一个独立的 base 插件。"
+        val offending = declared.filterNot { it in allowedForSkeleton }
+        check(offending.isEmpty()) {
+            "$sidecar 声明了系统数据权限 $offending，但它是 $category 层。" +
+                "只有 base（能力层）可以声明这类权限——" +
+                "骨架层碰用户数据说明分层错了，能力应该下沉成一个独立的 base 插件。" +
+                "（$allowedForSkeleton 是例外：它给的是插件自己的目录。）"
         }
     }
 }

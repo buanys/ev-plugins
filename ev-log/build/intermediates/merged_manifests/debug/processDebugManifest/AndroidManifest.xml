@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="ev.buan.plugin.log"
+    android:versionCode="1"
+    android:versionName="1.0.0" >
+
+    <uses-sdk
+        android:minSdkVersion="33"
+        android:targetSdkVersion="37" />
+
+    <!--
+      cordis.entry 是加载器找入口类的依据，必须与 sidecar 的 entryClass 一致。
+      cordis.hostApi 是范围门；XML 里的 < 和 > 必须转义成 &lt; / &gt;。
+    -->
+    <application
+        android:debuggable="true"
+        android:extractNativeLibs="false" >
+        <meta-data
+            android:name="cordis.entry"
+            android:value="ev.buan.plugin.log.SessionLogPlugin" />
+        <meta-data
+            android:name="cordis.api"
+            android:value="1" />
+        <meta-data
+            android:name="cordis.hostApi"
+            android:value=">=1.0.0 &lt;2.0.0" />
+    </application>
+
+</manifest>
