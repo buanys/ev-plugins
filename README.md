@@ -15,16 +15,32 @@ probe-remote/    受限档子进程的验证夹具，不是产品
 ## 产物命名：中文给人，英文给机器
 
 ```
-工具总线-base.jar
-工具总线-base.json
+工具总线-core.jar
+工具总线-core.json
 ```
 
 | 位置 | 形式 | 为什么 |
 |---|---|---|
 | 文件名 | `<中文名>-<分类>.jar` | 在 `/sdcard/EV/mods` 里一眼认出是什么 |
-| 分类 | `base` / `feature` / `integration` / `resource` | 与宿主仓库里 `plugins/<类>/<名>` 那一层对应 |
 | 插件 id | `ev.buan.plugin.tools` 之类，全英文 | 加载、比对、日志都靠它，不能有中文 |
 | 入口类 | 全英文全限定名 | 反射加载 |
+
+### 分层
+
+| 分类 | 是什么 | 能声明权限吗 |
+|---|---|---|
+| `core` | **骨架**：工具总线、日志、提示词、记忆、模型、大脑、界面 | ❌ 一个都不许 |
+| `base` | **能力**：通讯录、短信、媒体、定位、日历、设备、屏幕、终端 | ✅ 必须，且只声明真用的 |
+| `feature` | **功能**：组合 core + base 做成一件事 | ❌ |
+| `integration` | **外部**：模型 API、网页抓取、Web 控制台 | 看情况（通常只有 NETWORK） |
+| `resource` | **叶子**：主题、配件 | ❌ |
+
+分层的判据不是"代码多不多"，是**它要不要碰系统数据**：
+能力层把 Android 权限背后的东西变成服务，功能层只消费服务。骨架层连这个资格都没有——
+它要是需要权限，说明那个能力该下沉成一个独立的 `base` 插件。
+
+这条有门禁：`bundlePlugin` 会读模块声明的 `evPluginCategory`，
+**非 base 层声明了权限直接打包失败**。
 
 **jar 与 sidecar 必须同名同前缀**：宿主按「jar 去掉扩展名 + `.json`」找 sidecar，
 两个名字对不上，插件会被当成没有元数据（`PluginMetadataReader.readSidecarMetadata`）。
@@ -64,6 +80,8 @@ gradle :ev-tools:bundlePlugin          # 产物在 ev-tools/build/dist/
 ## 写新插件时要遵守的
 
 - `id` 用 `ev.buan.plugin.*`，不要占用 `ev.host` / `ev.core` / `org.cordis`
+- 在模块里声明 `pluginCategory` 并 `extra["evPluginCategory"] = pluginCategory`，
+  分层门禁靠它判断
 - sidecar 里声明 `hostApi` 范围（如 `>=1.0.0 <2.0.0`），不要只写整数 `apiVersion`
 - 壳薄、逻辑纯：插件类只做「声明自己 / 拿目录 / 发布 / 撤销」，
   真正有逻辑的部分放普通 Kotlin 类，好在 JVM 上测

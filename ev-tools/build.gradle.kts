@@ -52,18 +52,20 @@ val pluginDist = layout.buildDirectory.dir("dist")
 //
 // 文件名给人看，id 给机器看，两者分开：
 //
-//   产物  「工具总线-base.jar」/「工具总线-base.json」
+//   产物  「工具总线-core.jar」/「工具总线-core.json」
 //   id    ev.buan.plugin.tools
 //   入口  ev.buan.plugin.tools.ToolRegistryPlugin
 //
 // 中文在前是为了在 /sdcard/EV/mods 里一眼认出这是什么东西；
-// `-` 后面是**分类的英文名**（base / feature / integration / resource），
-// 与仓库里 plugins/<类>/<名> 那一层对应，用来在两个中文名相近时区分。
+// `-` 后面是**分类的英文名**，见 README 的分层表：
+//   core  骨架：没有它系统不成立，且**不许声明任何权限**
+//   base  能力：唯一可以声明 HostPermission 的一层
+//   feature / integration / resource  见 README
 //
 // **jar 与 sidecar 必须同名同前缀**：宿主按「jar 去掉扩展名 + .json」找 sidecar
 // （PluginMetadataReader.readSidecarMetadata），两个名字对不上，插件会被当成没有元数据。
 val pluginDisplayName = "工具总线"
-val pluginCategory = "base"
+val pluginCategory = "core"
 val artifactBase = "$pluginDisplayName-$pluginCategory"
 
 val bundlePluginJar = tasks.register<Zip>("bundlePluginJar") {
@@ -103,5 +105,8 @@ tasks.register("bundlePlugin") {
     }
 }
 
-// 与宿主仓库里同名脚本一致的两条不变量（配置缓存声明 + 产物自检）。
+// 让 plugin-verify 知道分类：它据此检查「只有 base 可以声明权限」。
+extra["evPluginCategory"] = pluginCategory
+
+// 与宿主仓库里同名脚本一致的不变量（配置缓存声明 + 产物自检 + 分层检查）。
 apply(from = rootProject.file("gradle/plugin-verify.gradle.kts"))
