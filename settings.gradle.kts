@@ -24,3 +24,7 @@ rootProject.name = "ev-plugins"
 includeBuild("/workspace/EV")
 
 include(":ev-tools")
+
+// 受限档子进程的验证夹具。它不是产品的一部分（只会回答自己的 pid），
+// 但隔离那条链路需要它可复现——否则下次改 binder 就没法验证。
+include(":probe-remote")
