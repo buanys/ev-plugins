@@ -61,6 +61,7 @@ internal class ApprovalChain(
                 ApprovalDecision.ALLOW_ONCE -> ApprovalOutcome.ALLOWED_ONCE
                 ApprovalDecision.ALLOW_SESSION -> ApprovalOutcome.ALLOWED_SESSION
                 ApprovalDecision.DENY -> ApprovalOutcome.REJECTED
+                ApprovalDecision.UNAVAILABLE -> ApprovalOutcome.UNAVAILABLE
             }
         }
     } catch (cancellation: CancellationException) {

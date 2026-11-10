@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="ev.buan.plugin.brain.AgentLoopTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-10T08:08:56.321Z" hostname="localhost" time="0.076">
+<testsuite name="ev.buan.plugin.brain.AgentLoopTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-10T09:19:13.636Z" hostname="localhost" time="0.152">
   <properties/>
-  <testcase name="工具总量预算到线就停" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.06"/>
+  <testcase name="工具总量预算到线就停" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.123"/>
   <testcase name="回合预算到线就停，原因说清" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.003"/>
   <testcase name="一轮工具之后模型收尾，历史完整且结局是 FINISHED" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.004"/>
   <testcase name="模型不再调工具就结束，不会多跑一轮" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.002"/>
-  <testcase name="危险工具没人审批时被拒，但这一轮继续" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.004"/>
-  <testcase name="模型抛错不往宿主抛，变成 ERROR 结局" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.001"/>
-  <testcase name="同样的调用得到同样的结果两次就停" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.001"/>
+  <testcase name="危险工具没人审批时被拒，但这一轮继续" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.005"/>
+  <testcase name="模型抛错不往宿主抛，变成 ERROR 结局" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.003"/>
+  <testcase name="同样的调用得到同样的结果两次就停" classname="ev.buan.plugin.brain.AgentLoopTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>
