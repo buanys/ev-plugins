@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -12,6 +13,10 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0.0"
+    }
+
+    buildFeatures {
+        compose = true
     }
 
     buildTypes {
@@ -32,6 +37,8 @@ configurations.matching { it.name.endsWith("RuntimeClasspath") && !it.name.conta
 
 dependencies {
     compileOnly("io.github.buanys:host-api:0.0.1-SNAPSHOT")
+    // 只编译期需要：运行时这些类由宿主提供（HostPackages.shared 里已含 ev.buan.ui）。
+    compileOnly("io.github.buanys:ui-kit:0.0.1-SNAPSHOT")
     compileOnly("io.github.buanys:loader:0.0.1-SNAPSHOT")
 
     testImplementation("junit:junit:4.13.2")

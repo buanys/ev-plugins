@@ -23,8 +23,15 @@ import org.cordis.api.ManifestProvider
 import org.cordis.api.PluginCapability
 import org.cordis.api.PluginManifest
 import org.cordis.api.PluginStorage
+import org.cordis.api.UiSlot
+import org.cordis.api.UiSlotRegistry
 import org.cordis.api.ServiceDirectory
 import org.cordis.dependencies
+import ev.buan.ui.EvRow
+import ev.buan.ui.EvSection
+import ev.buan.ui.EvText
+import ev.buan.ui.EvTextKind
+import ev.buan.ui.EvTone
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -71,7 +78,34 @@ class ModelPlugin : Plugin<Unit>, ManifestProvider {
         val models = ModelServiceImpl(store)
         directory.publish(ModelProviderService.Key, providers)
         directory.publish(ModelService.Key, models)
+        // 设置页里的那一小块：现在有没有能用的端点。
+        // 这也是槽位的第一个真实使用者——注册了就该出现在界面上。
+        directory.lookup(UiSlotRegistry.Key)?.let { slots ->
+            slots.contribute(manifest.id, UiSlot.SettingsSections, priority = 0) {
+                val usable = providers.providers()
+                    .count { it.enabled && it.apiKey.isNotBlank() && it.models.isNotEmpty() }
+                EvSection(title = "模型", footnote = "由模型插件提供") {
+                    EvRow(
+                        title = if (usable > 0) "已配置 $usable 个端点" else "还没有可用的端点",
+                        summary = if (usable > 0) {
+                            "对话会使用第一个可用的端点"
+                        } else {
+                            "填上 API key 才能开始对话"
+                        },
+                        trailing = {
+                            EvText(
+                                if (usable > 0) "可用" else "未配置",
+                                kind = EvTextKind.Caption,
+                                tone = if (usable > 0) EvTone.Accent else EvTone.Warning,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+
         effect.collect {
+            directory.lookup(UiSlotRegistry.Key)?.revoke(manifest.id)
             if (directory.lookup(ModelProviderService.Key) === providers) {
                 directory.retract(ModelProviderService.Key)
             }
