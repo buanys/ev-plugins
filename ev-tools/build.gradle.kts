@@ -46,6 +46,31 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-stdlib:2.4.20")
 }
 
+
+// 元数据两处都要：dist 里的 sidecar 供自检，容器里的 META-INF/plugin.json 供宿主——
+// 宿主优先读内嵌那份，所以一个 jar 自己就是完整的可分发插件。
+val pluginMetadata = """
+            {
+              "id": "ev.buan.plugin.tools",
+              "version": "1.0.0",
+              "entryClass": "ev.buan.plugin.tools.ToolRegistryPlugin",
+              "apiVersion": 1,
+              "hostApi": ">=1.0.0 <2.0.0",
+              "permissions": []
+            }
+        """.trimIndent()
+
+val pluginMetadataFile = layout.buildDirectory.file("plugin-metadata/plugin.json")
+
+val writePluginMetadata = tasks.register("writePluginMetadata") {
+    outputs.file(pluginMetadataFile)
+    doLast {
+        val file = pluginMetadataFile.get().asFile
+        file.parentFile?.mkdirs()
+        file.writeText(pluginMetadata)
+    }
+}
+
 val pluginDist = layout.buildDirectory.dir("dist")
 
 // ---------------------------------------------------------------- 产物命名
@@ -70,9 +95,13 @@ val artifactBase = "$pluginDisplayName-$pluginCategory"
 
 val bundlePluginJar = tasks.register<Zip>("bundlePluginJar") {
     group = "distribution"
-    dependsOn("assembleDebug")
+    dependsOn("assembleDebug", writePluginMetadata)
     from(zipTree(layout.buildDirectory.file("outputs/apk/debug/${project.name}-debug.apk"))) {
         include("classes*.dex")
+    }
+    from(pluginMetadataFile) {
+        into("META-INF")
+        rename { "plugin.json" }
     }
     destinationDirectory.set(pluginDist)
     archiveFileName.set("$artifactBase.jar")
@@ -91,17 +120,8 @@ tasks.register("bundlePlugin") {
     doLast {
         // sidecar 是运行时唯一能读到的元信息。hostApi 用范围而不是整数：
         // 声明了范围，整数门就完全退出（见宿主仓库 docs/sdk/versioning.md）。
-        val metadata = """
-            {
-              "id": "ev.buan.plugin.tools",
-              "version": "1.0.0",
-              "entryClass": "ev.buan.plugin.tools.ToolRegistryPlugin",
-              "apiVersion": 1,
-              "hostApi": ">=1.0.0 <2.0.0",
-              "permissions": []
-            }
-        """.trimIndent()
-        File(pluginDist.get().asFile, "$artifactBase.json").writeText(metadata)
+        
+        File(pluginDist.get().asFile, "$artifactBase.json").writeText(pluginMetadata)
     }
 }
 
