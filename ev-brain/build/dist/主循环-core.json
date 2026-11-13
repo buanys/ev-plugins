@@ -1,8 +1,0 @@
-{
-  "id": "ev.buan.plugin.brain",
-  "version": "1.0.0",
-  "entryClass": "ev.buan.plugin.brain.AgentBrainPlugin",
-  "apiVersion": 1,
-  "hostApi": ">=1.0.0 <2.0.0",
-  "permissions": []
-}
