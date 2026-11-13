@@ -30,4 +30,5 @@ includeBuild(hostTree)
 include(":ev-tools")
 include(":ev-log")
 include(":ev-brain")
+include(":ev-model")
 

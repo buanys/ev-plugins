@@ -43,6 +43,13 @@ dependencies {
     testImplementation("org.json:json:20260814")
 }
 
+// The agent runtime ships inside the container: `bin/ev-agentd` is extracted by
+// the plugin on first use. Point `-PevAgentd=` (or EV_AGENTD) at another build
+// when testing a local one.
+val daemonBinary = providers.gradleProperty("evAgentd").orNull
+    ?: System.getenv("EV_AGENTD")
+    ?: "../ev-agent/target/aarch64-unknown-linux-musl/release/ev-agentd"
+
 val pluginDist = layout.buildDirectory.dir("dist")
 
 val pluginDisplayName = "主循环"
@@ -54,6 +61,18 @@ val bundlePluginJar = tasks.register<Zip>("bundlePluginJar") {
     dependsOn("assembleDebug")
     from(zipTree(layout.buildDirectory.file("outputs/apk/debug/${project.name}-debug.apk"))) {
         include("classes*.dex")
+    }
+    val binary = rootProject.file(daemonBinary)
+    if (!binary.isFile) {
+        throw GradleException(
+            "找不到 agent 进程：${binary.absolutePath}\n" +
+                "先在 ev-agent 里执行 cargo build --release --target aarch64-unknown-linux-musl，" +
+                "或用 -PevAgentd=<path> 指定。",
+        )
+    }
+    from(binary) {
+        into("bin")
+        rename { "ev-agentd" }
     }
     destinationDirectory.set(pluginDist)
     archiveFileName.set("$artifactBase.jar")

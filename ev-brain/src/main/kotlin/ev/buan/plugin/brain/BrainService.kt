@@ -6,41 +6,59 @@ import ev.buan.plugins.agent.api.AgentReply
 import ev.buan.plugins.agent.api.AgentRole
 import ev.buan.plugins.agent.api.AgentService
 import ev.buan.plugins.agent.api.AgentStop
-import ev.buan.plugins.agent.api.ApprovalService
+import ev.buan.plugins.agent.api.ModelProviderService
 import ev.buan.plugins.agent.api.ModelRef
 import ev.buan.plugins.agent.api.ModelService
+import ev.buan.plugins.agent.api.PromptContext
+import ev.buan.plugins.agent.api.SessionEvent
 import ev.buan.plugins.agent.api.SessionLog
+import ev.buan.plugins.agent.api.StepState
 import ev.buan.plugins.agent.api.SystemPromptService
 import ev.buan.plugins.agent.api.ToolRegistry
-import kotlinx.coroutines.CancellationException
+import java.io.File
+import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.cordis.api.PluginStorage
 import org.cordis.api.ServiceDirectory
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
- * [AgentService] 的实现：把 loop 需要的六个服务**在每次调用时现查**。
+ * [AgentService] on top of the agent process.
  *
- * 为什么不在 `apply` 里查一次存起来：服务目录是动态的。`ev-model` 可能晚于本插件启动，
- * 也可能被停用再启用；把 null 缓存下来，会让"模型刚连上却仍然说没连上"变成常驻故障。
- * 每次查一次表是便宜的，代价只是几次 map 读。
+ * The loop lives in `ev-agentd`; this class is the host half of the contract:
+ * it hands the process a provider, the stored history and the tool list, then
+ * turns the process's events back into [AgentProgress] and writes the turn into
+ * [SessionLog].
  *
- * 缺服务时**不抛异常**：契约要求 `ready=false` 时仍能给出一个解释性的回复，
- * 否则一个没装模型插件的部署，界面上看到的会是崩溃而不是"还没连上模型"。
+ * Services are looked up on every call, never cached: `ev-model` may start
+ * after this plugin, and a cached `null` turns "just connected" into a
+ * permanent "not connected".
  */
 internal class BrainService(
     private val directory: ServiceDirectory,
-    private val limits: AgentLoop.Limits = AgentLoop.Limits(),
-    private val maxParallel: Int = ToolPipeline.DEFAULT_MAX_PARALLEL,
+    private val storage: PluginStorage?,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) : AgentService {
 
     private val log: SessionLog? get() = directory.lookup(SessionLog.Key)
     private val registry: ToolRegistry? get() = directory.lookup(ToolRegistry.Key)
-    private val models: ModelService? get() = directory.lookup(ModelService.Key)
+    private val providers: ModelProviderService? get() = directory.lookup(ModelProviderService.Key)
     private val prompt: SystemPromptService? get() = directory.lookup(SystemPromptService.Key)
-    private val gate: ApprovalService? get() = directory.lookup(ApprovalService.Key)
+
+    private var daemon: AgentDaemon? = null
+    private val startLock = Mutex()
 
     override val ready: Boolean
-        get() = models?.models?.isNotEmpty() == true && log != null
+        get() = configuredProvider() != null && log != null && storage != null
 
     override suspend fun send(
         sessionId: String,
@@ -48,17 +66,11 @@ internal class BrainService(
         model: ModelRef?,
         systemPrompt: String?,
     ): AgentReply {
-        val prepared = prepare()
-        if (prepared is Preparation.NotReady) return notConnected(prepared.reason)
-        val ready = prepared as Preparation.Ready
-        val ref = model ?: ready.models.first()
-        return try {
-            ready.loop.run(sessionId, text, ref, systemPrompt?.takeIf { it.isNotBlank() }, onProgress = {})
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (error: Throwable) {
-            failed(error)
+        var reply: AgentReply? = null
+        sendStreaming(sessionId, text, model, systemPrompt).collect { progress ->
+            if (progress is AgentProgress.Done) reply = progress.reply
         }
+        return reply ?: failed("这一轮没有给出结果")
     }
 
     override fun sendStreaming(
@@ -67,64 +79,201 @@ internal class BrainService(
         model: ModelRef?,
         systemPrompt: String?,
     ): Flow<AgentProgress> = flow {
-        val prepared = prepare()
-        if (prepared is Preparation.NotReady) {
-            emit(AgentProgress.Done(notConnected(prepared.reason)))
+        val provider = configuredProvider()
+        if (provider == null) {
+            emit(AgentProgress.Done(notConnected("模型插件还没有可用端点")))
             return@flow
         }
-        val ready = prepared as Preparation.Ready
-        val ref = model ?: ready.models.first()
-        try {
-            ready.loop.run(sessionId, text, ref, systemPrompt?.takeIf { it.isNotBlank() }) { progress ->
-                emit(progress)
-            }
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (error: Throwable) {
-            emit(AgentProgress.Done(failed(error)))
+        val session = log ?: run {
+            emit(AgentProgress.Done(notConnected("事件流插件（ev-log）没启动")))
+            return@flow
         }
+
+        val wireModel = model?.model
+            ?: provider.selectedModelId
+            ?: provider.models.firstOrNull()?.id
+            ?: run {
+                emit(AgentProgress.Done(notConnected("这个端点没有选模型")))
+                return@flow
+            }
+
+        val params = JSONObject()
+            .put("run_id", "r-" + UUID.randomUUID())
+            .put("provider", providerParams(provider))
+            .put("model", wireModel)
+            .put("prompt", text)
+            .put("history", history(session, sessionId))
+            .put("tools", tools())
+            .put("max_turns", 16)
+        preamble(sessionId, systemPrompt)?.let { params.put("preamble", it) }
+
+        val runId = params.getString("run_id")
+        val process = try {
+            daemon()
+        } catch (error: Throwable) {
+            emit(AgentProgress.Done(failed("agent 进程起不来：${error.message ?: error::class.simpleName}")))
+            return@flow
+        }
+
+        val queue = Channel<JSONObject>(Channel.UNLIMITED)
+        val relay = scope.launch {
+            process.events.collect { event ->
+                if (event.optString("run_id") == runId) queue.send(event)
+            }
+        }
+
+        val startedAt = System.currentTimeMillis()
+        var callIndex = 0
+        var finalText = ""
+        try {
+            process.call("turn", params, timeoutMs = 15_000)
+            while (true) {
+                val event = queue.receive()
+                when (event.optString("kind")) {
+                    "text" -> emit(AgentProgress.TextDelta(1, event.optString("text")))
+                    "tool_call" -> {
+                        callIndex += 1
+                        emit(
+                            AgentProgress.ToolStarted(
+                                round = 1,
+                                id = "${event.optString("tool_name")}#$callIndex",
+                                name = event.optString("tool_name"),
+                                argsJson = event.optString("arguments_json"),
+                                startedAt = System.currentTimeMillis(),
+                            ),
+                        )
+                    }
+                    "tool_result" -> emit(
+                        AgentProgress.ToolFinished(
+                            id = "${event.optString("tool_name")}#$callIndex",
+                            state = if (event.optBoolean("refused")) StepState.Failed else StepState.Ok,
+                            elapsedMs = System.currentTimeMillis() - startedAt,
+                            preview = event.optString("text").take(300),
+                        ),
+                    )
+                    "done" -> {
+                        finalText = event.optString("text")
+                        break
+                    }
+                }
+            }
+        } catch (error: Throwable) {
+            relay.cancel()
+            emit(AgentProgress.Done(failed(error.message ?: "这一轮失败了")))
+            return@flow
+        }
+        relay.cancel()
+
+        val reply = AgentReply(
+            message = AgentMessage(AgentRole.ASSISTANT, finalText),
+            model = ModelRef(provider.id, wireModel),
+            stop = AgentStop(AgentStop.Reason.FINISHED, rounds = 1, toolCalls = callIndex),
+        )
+        runCatching {
+            session.append(sessionId, SessionEvent.Message(AgentMessage(AgentRole.USER, text)))
+            session.append(sessionId, SessionEvent.Message(reply.message))
+            reply.stop?.let { session.append(sessionId, SessionEvent.TurnEnded(it)) }
+        }
+        emit(AgentProgress.Done(reply))
+    }
+
+    /** The first endpoint that can actually answer: enabled, keyed, with a model. */
+    private fun configuredProvider() = providers
+        ?.providers()
+        ?.firstOrNull { provider ->
+            provider.enabled &&
+                provider.apiKey.isNotBlank() &&
+                (provider.selectedModelId != null || provider.models.isNotEmpty())
+        }
+
+    private fun providerParams(provider: ev.buan.plugins.agent.api.ModelProvider) = JSONObject()
+        .put("base_url", provider.baseUrl)
+        .put("api_key", provider.apiKey)
+        .put("headers", JSONObject(provider.headers as Map<*, *>))
+
+    private suspend fun history(session: SessionLog, sessionId: String): JSONArray {
+        val array = JSONArray()
+        session.messages(sessionId).forEach { message ->
+            val role = when (message.role) {
+                AgentRole.USER -> "user"
+                AgentRole.ASSISTANT -> "assistant"
+                else -> null
+            } ?: return@forEach
+            if (message.content.isBlank()) return@forEach
+            array.put(JSONObject().put("role", role).put("text", message.content))
+        }
+        return array
+    }
+
+    private fun tools(): JSONArray {
+        val array = JSONArray()
+        registry?.specs()?.forEach { spec ->
+            array.put(
+                JSONObject()
+                    .put("name", spec.name)
+                    .put("description", spec.description)
+                    .put("parameters", runCatching { JSONObject(spec.parametersJson) }.getOrNull())
+                    .put("dangerous", spec.dangerous),
+            )
+        }
+        return array
+    }
+
+    /** Role instructions for this turn only: the caller's, else the prompt plugin's. */
+    private fun preamble(sessionId: String, systemPrompt: String?): String? {
+        systemPrompt?.takeIf { it.isNotBlank() }?.let { return it }
+        val service = prompt ?: return null
+        val layers = runCatching {
+            service.layers(PromptContext(sessionId, System.currentTimeMillis()))
+        }.getOrDefault(emptyList())
+        if (layers.isEmpty()) return null
+        return layers
+            .sortedWith(compareByDescending<ev.buan.plugins.agent.api.PromptLayer> { it.priority }
+                .thenBy { it.id })
+            .joinToString("\n\n") { it.body }
+            .takeIf { it.isNotBlank() }
+    }
+
+    private suspend fun daemon(): AgentDaemon = startLock.withLock {
+        daemon?.takeIf { it.alive }?.let { return@withLock it }
+        val area = storage ?: error("插件存储不可用")
+        val target = File(File(area.rootPath()), "bin/ev-agentd")
+        val binary = AgentDaemon.installBinary(container(), target)
+        val bridge = DaemonBridge(
+            tools = { directory.lookup(ToolRegistry.Key) },
+            approval = { directory.lookup(ev.buan.plugins.agent.api.ApprovalService.Key) },
+        )
+        val created = AgentDaemon(binary, scope) { method, params -> bridge.handle(method, params) }
+        created.hello()
+        daemon = created
+        created
     }
 
     /**
-     * 能不能跑，以及缺什么——**一个类型说清一件事**。
+     * The container this plugin was loaded from.
      *
-     * 以前这里返回 `AgentLoop?`，缺什么由另一个 `missingReason()` 再判一次。
-     * 同一份知识编码在两个地方，改一处忘另一处就会给出错误的解释。
+     * The host stores every plugin as `mods/<id>.jar`; the id is fixed by the
+     * manifest, so no lookup service is needed. A missing file is a real error:
+     * without the container there is no bundled daemon to extract.
      */
-    private sealed interface Preparation {
-        data class Ready(val loop: AgentLoop, val models: List<ModelRef>) : Preparation
-        data class NotReady(val reason: String) : Preparation
-    }
-
-    /** 六个依赖里缺任何一个都不组 loop：半套依赖跑起来只会产出错误的历史。 */
-    private fun prepare(): Preparation {
-        val log = log ?: return Preparation.NotReady("事件流插件（ev-log）没启动")
-        val model = models ?: return Preparation.NotReady("模型插件（ev-model）没启动")
-        if (model.models.isEmpty()) return Preparation.NotReady("模型插件还没有配置任何模型")
-
-        val loop = AgentLoop(
-            log = log,
-            registry = registry,
-            model = model,
-            prompt = prompt,
-            approval = ApprovalChain(log = log, gate = { gate }),
-            pipeline = ToolPipeline(maxParallel),
-            limits = limits,
+    private fun container(): File {
+        val area = storage ?: error("插件存储不可用")
+        val root = File(area.rootPath())
+        val parent = root.parentFile ?: root
+        val candidates = listOf(
+            File(parent, "${AgentBrainPlugin.ID}.jar"),
+            File("/data/data/ev.buan/files/mods/${AgentBrainPlugin.ID}.jar"),
         )
-        return Preparation.Ready(loop, model.models)
+        return candidates.firstOrNull { it.isFile } ?: error("找不到插件容器 ${AgentBrainPlugin.ID}.jar")
     }
 
-    /** 契约要求：不 ready 也要答一句人话，调用方忽略 [ready] 也不该看到崩溃。 */
     private fun notConnected(detail: String): AgentReply = AgentReply(
         message = AgentMessage(AgentRole.ASSISTANT, "还没连上：$detail。"),
         stop = AgentStop(AgentStop.Reason.ERROR, rounds = 0, toolCalls = 0, detail = detail),
     )
 
-    private fun failed(error: Throwable): AgentReply {
-        val detail = error.message ?: error::class.simpleName ?: "未知错误"
-        return AgentReply(
-            message = AgentMessage(AgentRole.ASSISTANT, "这一轮失败了：$detail"),
-            stop = AgentStop(AgentStop.Reason.ERROR, rounds = 0, toolCalls = 0, detail = detail),
-        )
-    }
+    private fun failed(detail: String): AgentReply = AgentReply(
+        message = AgentMessage(AgentRole.ASSISTANT, "这一轮失败了：$detail"),
+        stop = AgentStop(AgentStop.Reason.ERROR, rounds = 0, toolCalls = 0, detail = detail),
+    )
 }
