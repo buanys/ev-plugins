@@ -30,7 +30,7 @@ import ev.buan.ui.EvColors
 import ev.buan.ui.EvRow
 import ev.buan.ui.EvSection
 import ev.buan.ui.EvText
-import ev.buan.ui.EvTextKind
+import com.itos.coui.text.CouiTextKind
 import ev.buan.ui.EvTone
 import kotlinx.coroutines.launch
 
@@ -75,7 +75,7 @@ internal fun ModelSettings(service: ModelProviderService) {
                 trailing = {
                     EvText(
                         if (usable(provider)) "可用" else "未配置",
-                        kind = EvTextKind.Caption,
+                        kind = CouiTextKind.PreferenceSummary,
                         tone = if (usable(provider)) EvTone.Accent else EvTone.Warning,
                     )
                 },
@@ -128,7 +128,7 @@ internal fun ModelSettings(service: ModelProviderService) {
         notice?.let { text ->
             EvText(
                 text,
-                kind = EvTextKind.Caption,
+                kind = CouiTextKind.PreferenceSummary,
                 tone = if (text.startsWith("✗")) EvTone.Danger else EvTone.Muted,
                 modifier = Modifier.padding(top = 6.dp),
             )
@@ -178,7 +178,7 @@ private fun Field(
     val colors = EvColors
     val style = TextStyle(color = colors.textPrimary, fontSize = 14.sp)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        EvText(label, kind = EvTextKind.Caption, tone = EvTone.Muted)
+        EvText(label, kind = CouiTextKind.PreferenceSummary, tone = EvTone.Muted)
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -192,7 +192,7 @@ private fun Field(
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             decorationBox = { inner ->
                 if (value.isEmpty()) {
-                    EvText(placeholder, kind = EvTextKind.Caption, tone = EvTone.Muted)
+                    EvText(placeholder, kind = CouiTextKind.PreferenceSummary, tone = EvTone.Muted)
                 }
                 inner()
             },
