@@ -44,7 +44,59 @@ import kotlinx.coroutines.launch
  * 不维护第二份状态：`providers.json` 是唯一的真相源。
  */
 @Composable
-internal fun ModelSettings(service: ModelProviderService) {
+internal fun ModelSettings(service: ModelProviderService, directory: org.cordis.api.ServiceDirectory) {
+    // 这里只剩一行入口。之前整个编辑表单（三个输入框 + 三个按钮）塞在设置页中间，
+    // 一展开就把外观和关于推到两屏之外。表单搬进了独立的模型页（ModelPage），
+    // 那里有自己的标题栏和滚动，装得下；设置页只留一个跳转点。
+    val providers = remember { service.providers() }
+    // 从插件自己的 ServiceDirectory 拿注册表：槽位内容只带一个闭包，上下文不在了，
+    // 但目录是插件 apply 时捕获的，服务还在。
+    val slots = remember { directory.lookup(org.cordis.api.UiSlotRegistry.Key) }
+    EvSection(title = "模型") {
+        val anyUsable = providers.any { usable(it) }
+        EvRow(
+            title = "模型端点",
+            summary = providers
+                .filter { it.enabled }
+                .joinToString("、") { it.name }
+                .ifBlank { "还没配置" },
+            onClick = {
+                android.util.Log.i("EV", "model entry clicked, registry=${slots != null}")
+                slots?.openPage("model")
+            },
+            trailing = {
+                EvText(
+                    if (anyUsable) "已配置" else "未配置",
+                    kind = CouiTextKind.PreferenceSummary,
+                    tone = if (anyUsable) EvTone.Accent else EvTone.Warning,
+                )
+            },
+        )
+    }
+
+}
+
+/**
+ * 模型端点的整页编辑（[org.cordis.api.AgentPage]）。
+ *
+ * 宿主的设置页放一行入口，点进来是这一页：自己的标题栏、自己的滚动。
+ * 编辑、测试连接、启停都在这里——它们需要的是"一个可以慢慢填的表单"，
+ * 不是"设置页里一块会伸缩的区域"。
+ */
+internal class ModelPage(private val service: ModelProviderService) : org.cordis.api.AgentPage {
+    override val pageTitle: String = "模型"
+
+    @androidx.compose.runtime.Composable
+    override fun Page(modifier: androidx.compose.ui.Modifier, onBack: () -> Unit) {
+        ev.buan.ui.EvPage(title = pageTitle, onBack = onBack, modifier = modifier) {
+            ModelEditor(service = service, onDismiss = onBack)
+        }
+    }
+}
+
+/** 模型端点列表 + 展开编辑。被 [ModelPage] 整页承载。 */
+@Composable
+internal fun ModelEditor(service: ModelProviderService, onDismiss: () -> Unit) {
     var providers by remember { mutableStateOf(service.providers()) }
     var editing by remember { mutableStateOf<String?>(null) }
     var baseUrl by remember { mutableStateOf("") }
@@ -57,7 +109,7 @@ internal fun ModelSettings(service: ModelProviderService) {
         providers = service.providers()
     }
 
-    EvSection(title = "模型", footnote = "由模型插件提供") {
+    EvSection(title = "端点", footnote = "点一行展开编辑；改动立即保存到插件存储。") {
         providers.forEach { provider ->
             EvRow(
                 title = provider.name,

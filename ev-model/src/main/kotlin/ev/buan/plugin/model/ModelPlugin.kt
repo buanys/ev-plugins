@@ -40,7 +40,21 @@ import org.json.JSONObject
  * runs rig itself and receives the endpoint per turn - but the contract stays
  * whole, so a caller that only knows [ModelService] still works.
  */
-class ModelPlugin : Plugin<Unit>, ManifestProvider {
+class ModelPlugin : Plugin<Unit>, ManifestProvider, org.cordis.api.AgentPage {
+
+    // 整页编辑由 ModelPage 承载；宿主通过 pageFor(id) 拿到的就是本实例
+    // （HostRouting 把插件实例 as? AgentPage）。所以插件自己要实现这个接口，
+    // 只做转发——不实现的话 pageOf 返回 null，入口行点了会原地弹回设置页。
+    override val pageTitle: String = "模型"
+
+    override val isHomeCandidate: Boolean = false
+
+    private lateinit var pageDelegate: ModelPage
+
+    @androidx.compose.runtime.Composable
+    override fun Page(modifier: androidx.compose.ui.Modifier, onBack: () -> Unit) {
+        pageDelegate.Page(modifier, onBack)
+    }
 
     override val manifest: PluginManifest = PluginManifest(
         id = ID,
@@ -65,6 +79,7 @@ class ModelPlugin : Plugin<Unit>, ManifestProvider {
 
     override val name = "ev-model"
 
+
     // PluginStorage 由宿主 provide 到本插件自己的子 Context，不属于父链，
     // 所以它不能写进 inject（inject 只声明继承来的服务），apply 里 require 即可。
     override val inject: Dependencies = dependencies(ServiceDirectory.Key)
@@ -76,13 +91,14 @@ class ModelPlugin : Plugin<Unit>, ManifestProvider {
         val store = ProviderStore(File(area.rootPath(), "providers.json"))
         val providers = ModelProviderImpl(store)
         val models = ModelServiceImpl(store)
+        pageDelegate = ModelPage(providers)
         directory.publish(ModelProviderService.Key, providers)
         directory.publish(ModelService.Key, models)
         // 设置页里的那一小块：端点列表 + 编辑（地址 / key / 模型名）。
         // 这块界面由插件自己画，宿主只给位置和主题。
         directory.lookup(UiSlotRegistry.Key)?.let { slots ->
             slots.contribute(manifest.id, UiSlot.SettingsSections, priority = 0) {
-                ModelSettings(providers)
+                ModelSettings(providers, directory)
             }
         }
 
