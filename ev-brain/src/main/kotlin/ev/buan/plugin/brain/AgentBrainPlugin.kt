@@ -57,10 +57,15 @@ class AgentBrainPlugin : Plugin<Unit>, ManifestProvider {
         val storage = directory.lookup(PluginStorageBroker.Key)?.storageFor(ID)
         val brain = BrainService(directory, storage)
         directory.publish(AgentService.Key, brain)
+        // 管理页的入口：同一个对象，另一条契约。页面只读状态、改参数，不碰 IPC。
+        directory.publish(org.cordis.api.AgentRuntime.Key, brain)
 
         effect.collect {
             if (directory.lookup(AgentService.Key) === brain) {
                 directory.retract(AgentService.Key)
+            }
+            if (directory.lookup(org.cordis.api.AgentRuntime.Key) === brain) {
+                directory.retract(org.cordis.api.AgentRuntime.Key)
             }
         }
     }

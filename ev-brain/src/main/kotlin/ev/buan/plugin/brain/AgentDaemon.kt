@@ -75,13 +75,30 @@ internal class AgentDaemon(
 
     val alive: Boolean get() = process.isAlive
 
+    /** 进程号，`hello` 自己报上来的；宿主不去猜 Process 的内部实现。 */
+    var pid: Long? = null
+        private set
+
+    /** 这一份进程是什么时候起的，管理页用来算"跑了多久"。 */
+    val startedAtMillis: Long = System.currentTimeMillis()
+
+    /** `hello` 报回来的协议版本，页面直接显示，不再猜。 */
+    var protocolVersion: Int? = null
+        private set
+
     init {
         scope.launch(Dispatchers.IO) { readLoop() }
         scope.launch(Dispatchers.IO) { readErrors() }
     }
 
     /** `hello` plus the protocol version the daemon speaks. */
-    suspend fun hello(): JSONObject = call("hello", JSONObject(), timeoutMs = 10_000)
+    suspend fun hello(): JSONObject {
+        val reply = call("hello", JSONObject(), timeoutMs = 10_000)
+        val result = reply.optJSONObject("result")
+        protocolVersion = result?.optInt("protocol")
+        pid = result?.optLong("pid")?.takeIf { it > 0 }
+        return reply
+    }
 
     /** Sends a command and waits for its answer. */
     suspend fun call(method: String, params: JSONObject, timeoutMs: Long = 30_000): JSONObject {

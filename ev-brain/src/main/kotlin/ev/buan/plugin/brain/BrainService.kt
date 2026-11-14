@@ -16,7 +16,10 @@ import ev.buan.plugins.agent.api.StepState
 import ev.buan.plugins.agent.api.SystemPromptService
 import ev.buan.plugins.agent.api.ToolRegistry
 import java.io.File
+import org.cordis.api.AgentRuntime
 import org.cordis.api.AgentRuntimeService
+import org.cordis.api.AgentRuntimeStatus
+
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,7 +51,7 @@ internal class BrainService(
     private val directory: ServiceDirectory,
     private val storage: PluginStorage?,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-) : AgentService {
+) : AgentService, AgentRuntime {
 
     private val log: SessionLog? get() = directory.lookup(SessionLog.Key)
     private val registry: ToolRegistry? get() = directory.lookup(ToolRegistry.Key)
@@ -57,6 +60,11 @@ internal class BrainService(
 
     private var daemon: AgentDaemon? = null
     private val startLock = Mutex()
+
+    /** 管理页能改的两个参数，下一轮生效。 */
+    private var maxTurns: Int = 16
+    private var preambleOverride: String? = null
+    private var lastError: String? = null
 
     override val ready: Boolean
         get() = configuredProvider() != null && log != null && storage != null
@@ -105,8 +113,8 @@ internal class BrainService(
             .put("prompt", text)
             .put("history", history(session, sessionId))
             .put("tools", tools())
-            .put("max_turns", 16)
-        preamble(sessionId, systemPrompt)?.let { params.put("preamble", it) }
+            .put("max_turns", maxTurns)
+        (preambleOverride ?: preamble(sessionId, systemPrompt))?.let { params.put("preamble", it) }
 
         val runId = params.getString("run_id")
         val process = try {
@@ -160,11 +168,13 @@ internal class BrainService(
             }
         } catch (error: Throwable) {
             relay.cancel()
+            lastError = error.message ?: error::class.simpleName
             emit(AgentProgress.Done(failed(error.message ?: "这一轮失败了")))
             return@flow
         }
         relay.cancel()
 
+        lastError = null
         val reply = AgentReply(
             message = AgentMessage(AgentRole.ASSISTANT, finalText),
             model = ModelRef(provider.id, wireModel),
@@ -260,4 +270,42 @@ internal class BrainService(
         message = AgentMessage(AgentRole.ASSISTANT, "这一轮失败了：$detail"),
         stop = AgentStop(AgentStop.Reason.ERROR, rounds = 0, toolCalls = 0, detail = detail),
     )
+    // ---- AgentRuntime：管理页读写的运行态 ----
+
+    override fun status(): AgentRuntimeStatus {
+        val process = daemon?.takeIf { it.alive }
+        val path = runCatching {
+            directory.lookup(AgentRuntimeService.Key)?.binaryPath()
+        }.getOrNull()
+        return AgentRuntimeStatus(
+            alive = process != null,
+            pid = process?.pid,
+            startedAtMillis = process?.startedAtMillis,
+            binaryPath = path,
+            binaryBytes = path?.let { runCatching { File(it).length() }.getOrNull() },
+            protocolVersion = process?.protocolVersion,
+            maxTurns = maxTurns,
+            preamble = preambleOverride,
+            lastError = lastError,
+        )
+    }
+
+    override fun setMaxTurns(turns: Int) {
+        maxTurns = turns.coerceIn(1, 64)
+    }
+
+    override fun setPreamble(text: String?) {
+        preambleOverride = text?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    override suspend fun restart() {
+        startLock.withLock {
+            daemon?.stop()
+            daemon = null
+        }
+    }
+
+    override suspend fun stop() {
+        restart()
+    }
 }
