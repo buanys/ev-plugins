@@ -33,6 +33,10 @@ android {
 
 configurations.matching { it.name.endsWith("RuntimeClasspath") && !it.name.contains("UnitTest") }.configureEach {
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+    // 插件与宿主共享这些类：打进 dex 会让插件加载自己那份，接口版本与宿主实现不一致，
+    // 调用时抛 AbstractMethodError（实测 UiSlotRegistry.contribute）。运行期由宿主提供。
+    exclude(group = "io.github.buanys", module = "host-api")
+    exclude(group = "io.github.buanys", module = "ui-kit")
 }
 
 dependencies {
@@ -60,7 +64,7 @@ val pluginMetadata = """
               "entryClass": "ev.buan.plugin.model.ModelPlugin",
               "apiVersion": 1,
               "hostApi": ">=1.0.0 <2.0.0",
-              "permissions": []
+              "permissions": ["PLUGIN_STORAGE"]
             }
         """.trimIndent()
 

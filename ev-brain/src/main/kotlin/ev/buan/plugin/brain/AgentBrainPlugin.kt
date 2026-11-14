@@ -9,6 +9,7 @@ import org.cordis.api.ManifestProvider
 import org.cordis.api.PluginCapability
 import org.cordis.api.PluginManifest
 import org.cordis.api.PluginStorage
+import org.cordis.api.PluginStorageBroker
 import org.cordis.api.ServiceDirectory
 import org.cordis.dependencies
 
@@ -45,13 +46,16 @@ class AgentBrainPlugin : Plugin<Unit>, ManifestProvider {
         const val ID = "ev.buan.plugin.brain"
     }
 
-    override val inject: Dependencies = dependencies(ServiceDirectory.Key, PluginStorage.Key)
+    // PluginStorage 由宿主 provide 到本插件自己的子 Context，不属于父链，
+    // 所以它不能写进 inject（inject 只声明继承来的服务），apply 里 require 即可。
+    override val inject: Dependencies = dependencies(ServiceDirectory.Key)
 
     override suspend fun apply(ctx: Context, config: Unit, effect: EffectScope) {
         val directory = ctx.require(ServiceDirectory.Key)
         // Storage holds the extracted agent binary; the container ships it in
         // `bin/ev-agentd` and it is unpacked on first use.
-        val brain = BrainService(directory, ctx.require(PluginStorage.Key))
+        val storage = directory.lookup(PluginStorageBroker.Key)?.storageFor(ID)
+        val brain = BrainService(directory, storage)
         directory.publish(AgentService.Key, brain)
 
         effect.collect {

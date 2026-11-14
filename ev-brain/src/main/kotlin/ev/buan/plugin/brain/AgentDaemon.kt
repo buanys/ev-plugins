@@ -222,26 +222,4 @@ internal class AgentDaemon(
         )
         .toString()
 
-    companion object {
-        /**
-         * Extracts the bundled daemon next to the jar and starts it.
-         *
-         * The container ships `bin/ev-agentd`; the host stores the container as
-         * `mods/<id>.jar`, so the bytes are read back out of that jar and
-         * written 0755 into the plugin's own storage. Rewritten whenever the
-         * size changes, which is enough to pick up a new build.
-         */
-        fun installBinary(jar: File, target: File): File {
-            if (target.isFile) return target
-            target.parentFile?.mkdirs()
-            java.util.zip.ZipFile(jar).use { zip ->
-                val entry = zip.getEntry("bin/ev-agentd") ?: error("插件容器里没有 bin/ev-agentd")
-                zip.getInputStream(entry).use { input ->
-                    target.outputStream().use { output -> input.copyTo(output) }
-                }
-            }
-            target.setExecutable(true, false)
-            return target
-        }
-    }
 }

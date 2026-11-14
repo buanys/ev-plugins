@@ -60,7 +60,7 @@ val pluginMetadata = """
               "entryClass": "ev.buan.plugin.brain.AgentBrainPlugin",
               "apiVersion": 1,
               "hostApi": ">=1.0.0 <2.0.0",
-              "permissions": []
+              "permissions": ["PLUGIN_STORAGE"]
             }
         """.trimIndent()
 

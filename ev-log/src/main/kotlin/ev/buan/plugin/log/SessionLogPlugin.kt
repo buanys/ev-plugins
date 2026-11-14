@@ -10,6 +10,7 @@ import org.cordis.api.ManifestProvider
 import org.cordis.api.PluginCapability
 import org.cordis.api.PluginManifest
 import org.cordis.api.PluginStorage
+import org.cordis.api.PluginStorageBroker
 import org.cordis.api.ServiceDirectory
 import org.cordis.dependencies
 
@@ -38,11 +39,15 @@ class SessionLogPlugin : Plugin<Unit>, ManifestProvider {
 
     override val name = "ev-log"
 
-    override val inject: Dependencies = dependencies(ServiceDirectory.Key, PluginStorage.Key)
+    // PluginStorage 由宿主 provide 到本插件自己的子 Context，不属于父链，
+    // 所以它不能写进 inject（inject 只声明继承来的服务），apply 里 require 即可。
+    override val inject: Dependencies = dependencies(ServiceDirectory.Key)
 
     override suspend fun apply(ctx: Context, config: Unit, effect: EffectScope) {
         val directory = ctx.require(ServiceDirectory.Key)
-        val storage = ctx.require(PluginStorage.Key)
+        // 存储不在插件的 inject 里，也不在子 Context 上：根目录的 broker 按 id 发一份。
+        val storage = directory.lookup(PluginStorageBroker.Key)?.storageFor(manifest.id)
+            ?: error("插件存储不可用：先确认容器里声明了 PLUGIN_STORAGE")
 
         // 没有可写目录就没有"不可丢"这回事——宁可起不来，也别假装在记日志。
         val root = storage.rootPath()

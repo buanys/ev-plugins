@@ -16,6 +16,7 @@ import ev.buan.plugins.agent.api.StepState
 import ev.buan.plugins.agent.api.SystemPromptService
 import ev.buan.plugins.agent.api.ToolRegistry
 import java.io.File
+import org.cordis.api.AgentRuntimeService
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -236,35 +237,18 @@ internal class BrainService(
 
     private suspend fun daemon(): AgentDaemon = startLock.withLock {
         daemon?.takeIf { it.alive }?.let { return@withLock it }
-        val area = storage ?: error("插件存储不可用")
-        val target = File(File(area.rootPath()), "bin/ev-agentd")
-        val binary = AgentDaemon.installBinary(container(), target)
+        // 二进制由宿主以 native library 的形式打包：Android 不允许执行应用数据目录里的
+        // ELF（SELinux），所以插件不再自己解压 jar，只向宿主问路径。
+        val path = directory.lookup(AgentRuntimeService.Key)?.binaryPath()
+            ?: error("这台机器没有 agent 运行时：APK 里没有 libev_agentd.so")
         val bridge = DaemonBridge(
             tools = { directory.lookup(ToolRegistry.Key) },
             approval = { directory.lookup(ev.buan.plugins.agent.api.ApprovalService.Key) },
         )
-        val created = AgentDaemon(binary, scope) { method, params -> bridge.handle(method, params) }
+        val created = AgentDaemon(File(path), scope) { method, params -> bridge.handle(method, params) }
         created.hello()
         daemon = created
         created
-    }
-
-    /**
-     * The container this plugin was loaded from.
-     *
-     * The host stores every plugin as `mods/<id>.jar`; the id is fixed by the
-     * manifest, so no lookup service is needed. A missing file is a real error:
-     * without the container there is no bundled daemon to extract.
-     */
-    private fun container(): File {
-        val area = storage ?: error("插件存储不可用")
-        val root = File(area.rootPath())
-        val parent = root.parentFile ?: root
-        val candidates = listOf(
-            File(parent, "${AgentBrainPlugin.ID}.jar"),
-            File("/data/data/ev.buan/files/mods/${AgentBrainPlugin.ID}.jar"),
-        )
-        return candidates.firstOrNull { it.isFile } ?: error("找不到插件容器 ${AgentBrainPlugin.ID}.jar")
     }
 
     private fun notConnected(detail: String): AgentReply = AgentReply(
