@@ -6,8 +6,10 @@ EV 的插件都住在这里。宿主在 `/workspace/EV`，**那边已经不含�
 ## 目录
 
 ```
-ev-tools/        工具总线（骨架第一件）
-probe-remote/    受限档子进程的验证夹具，不是产品
+ev-tools/        工具总线
+ev-log/          会话事件流
+ev-model/        模型端点配置（含独立的模型页）
+ev-brain/        agent 主循环，托管 libev_agentd.so 子进程
 ```
 
 一个插件一个模块，模块名就是它的英文基础名（`ev-` 前缀）。
@@ -78,8 +80,23 @@ gradle :ev-tools:bundlePlugin          # 产物在 ev-tools/build/dist/
 
 ## 装到设备
 
-产物（jar + json，两个一起）放进 `/sdcard/EV/mods/`，然后重启 EV。
-未签名插件需要人工批准——这是宿主的信任门禁，不是缺陷。
+不是拷到 `/sdcard/EV/mods/` 了——那是老路子。现在插件住在应用私有目录，
+而 EV 的 `/data/data/ev.buan` 在 Eta 的 mount namespace 里被遮住，**必须用 `nsenter`**：
+
+```bash
+cp ev-model/build/dist/模型-core.jar /data/local/tmp/p-model.jar
+nsenter -t 1 -m -- sh -c '
+  cp /data/local/tmp/p-model.jar /data/data/ev.buan/files/mods/ev.buan.plugin.model.jar
+  chown u0_a459:u0_a459 /data/data/ev.buan/files/mods/ev.buan.plugin.model.jar
+  chmod 400 /data/data/ev.buan/files/mods/ev.buan.plugin.model.jar
+  rm -rf /data/data/ev.buan/code_cache/cordis-plugins/ev.buan.plugin.model
+  rm -f /data/data/ev.buan/files/crash/crash.pending
+'
+am force-stop ev.buan && am start -n ev.buan/.MainActivity
+```
+
+三件事缺一不可：**清 dex 缓存**（不清就加载旧代码）、**清 crash.pending**（不清进安全模式）、
+**重启进程**（插件只在启动时装载）。
 
 ## 写新插件时要遵守的
 
